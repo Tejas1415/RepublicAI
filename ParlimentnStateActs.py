@@ -11,6 +11,7 @@ import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
+import fitz
 
 # URL of the web page to scrape
 url = "https://prsindia.org/acts/parliament"  
@@ -64,6 +65,59 @@ df['date'] = df['hyperlink_text'].apply(extract_year_and_format)
 
 
 #### Now for each of these links, go to the pdf and extract the content to put it on the csv.
+
+def remove_empty_lines(text):
+    lines = text.splitlines()
+    non_empty_lines = [line for line in lines if line.strip()]
+    return '\n'.join(non_empty_lines)
+
+def clean_text(text):
+    # Check if the input is a string, otherwise return the input unchanged
+    if isinstance(text, str):
+        text = remove_empty_lines(text)
+        text = text.replace('\n', ' ').replace('\t', ' ').replace('\r', ' ')
+        text = text.replace('...', ' ').replace('.....', ' ')
+        # Replace non-standard characters with an empty string
+        return re.sub(r'[^\x00-\x7F]+', ' ', text)
+    else:
+        return text
+    
+    
+content = []
+for i in range(0, df.shape[0]):
+    link = df['pdf_link'].iloc[i]
+    
+    ## print the progress
+    print("In ", i, " Out of ", df.shape[0])
+    
+    # Fetch the PDF content from the URL
+    response = requests.get(link)
+    
+    if response.status_code == 200:
+        pdf_content = response.content
+        
+        # Open the PDF with PyMuPDF (fitz)
+        pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
+        
+        text = ''
+        # Iterate through the pages and extract text
+        for page_num in range(pdf_document.page_count):
+            page = pdf_document.load_page(page_num)
+            pdf_text = page.get_text()
+            text = text + pdf_text
+
+        
+        text = clean_text(text)
+        content.append(text)
+
+
+
+df['content'] = content
+
+
+## Save the csv
+path = "C:/Users/Tejas/Desktop/RepublicAI/ParlimentActs/"
+df.to_csv(path + "ParlimentActs_9sep23.csv", index = False)
 
 
 
