@@ -12,6 +12,33 @@ import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
+import fitz
+import requests
+import re
+
+
+
+def remove_empty_lines(text):
+    lines = text.splitlines()
+    non_empty_lines = [line for line in lines if line.strip()]
+    return '\n'.join(non_empty_lines)
+
+def clean_text(text):
+    # Check if the input is a string, otherwise return the input unchanged
+    if isinstance(text, str):
+        text = remove_empty_lines(text)
+        text = text.replace('\n', ' ').replace('\t', ' ').replace('\r', ' ')
+        text = text.replace('...', ' ').replace('.....', ' ')
+        # Replace non-standard characters with an empty string
+        return re.sub(r'[^\x00-\x7F]+', ' ', text)
+    else:
+        return text
+
+
+# Define a user agent string 
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+headers = {"User-Agent": user_agent}
+
 
 def supreme_court_year(year):
     # URL to scrape
@@ -67,33 +94,67 @@ def supreme_court_year(year):
     import time
     content = []
     for i in range(0, df.shape[0]):
+        
+        ## print the progress
+        print("In ", i, " Out of ", df.shape[0])
+        
         link = df['Hyperlink'].iloc[i]
-        driver.get(link)
-        time.sleep(0.5)
-        
-        # Find all <p> elements
-        p_elements = driver.find_elements(By.TAG_NAME, 'p')
-        
-        # Initialize a variable to store the content
-        all_content = []
-        
-        # Loop through each <p> element
-        for p_element in p_elements:
-            # Get the text content of the <p> element
-            p_text = p_element.text
-            
-            # Append the content to the list
-            all_content.append(p_text)
-        
-        # Combine all the content into one string
-        all_content = all_content[:-1]  ## Last disclaimer notice is not needed.
-        combined_content = ' \n '.join(all_content)
-        content.append(combined_content)
+             
+        if year >= 2017:
+            try:
+                ## make the link a pdf link
+                link1 = link[:-5] + '.pdf'
+                
+                # Fetch the PDF content from the URL
+                response = requests.get(link1, headers=headers)
+                
+                if response.status_code == 200:
+                    pdf_content = response.content
+                    
+                    # Open the PDF with PyMuPDF (fitz)
+                    pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
+                    
+                    text = ''
+                    # Iterate through the pages and extract text
+                    for page_num in range(pdf_document.page_count):
+                        page = pdf_document.load_page(page_num)
+                        pdf_text = page.get_text()
+                        text = text + pdf_text
     
-    lawyers = all_content[2]
+                    
+                    text = clean_text(text)
+                    content.append(text)
+            except:
+                text = ''
+                content.append(text)
+                
+        ## Before 2017 the format of the cases available are different, after 2017 its pdfs
+        else:
+            
+            driver.get(link)
+            time.sleep(0.5)
+            
+            # Find all <p> elements
+            p_elements = driver.find_elements(By.TAG_NAME, 'p')
+            
+            # Initialize a variable to store the content
+            all_content = []
+            
+            # Loop through each <p> element
+            for p_element in p_elements:
+                # Get the text content of the <p> element
+                p_text = p_element.text
+                
+                # Append the content to the list
+                all_content.append(p_text)
+            
+            # Combine all the content into one string
+            all_content = all_content[:-1]  ## Last disclaimer notice is not needed.
+            combined_content = ' \n '.join(all_content)
+            content.append(combined_content)
+        
     df['content'] = content
-    df['lawyers'] = lawyers
-
+    
     # Close the browser
     driver.quit()
     
@@ -112,46 +173,12 @@ def supreme_court_year(year):
 ############################################ Main Code
 import time
 path = "C:/Users/Tejas/Desktop/RepublicAI/SupremeCourt/"
-years = list(range(2008, 2024))
+years = list(range(2021, 2024))
 
 for y in years:
     df = supreme_court_year(y)
     df.to_csv(path + "SupremeCourt_{}.csv".format(y), index = False)
     time.sleep(4)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
