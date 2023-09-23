@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Sep 19 22:02:22 2023
+Created on Sat Sep 23 11:48:40 2023
 
 @author: Tejas
 
-Parliment acts data download 
+StateActs Download Sep 23rd
 """
 
 import requests
@@ -18,34 +18,46 @@ import matplotlib.pyplot as plt
 
 
 
-
 ########################################################### META DATA
 
+## There are only 139 pages. 
+## to check no of pages - go to https://prsindia.org/acts/states?page=99999
+df_per_page = []
+for i in list(range(1,139)):
+    print(i)
+    
+    try:
+        # URL of the web page to scrape
+        url = "https://prsindia.org/acts/states?page={}".format(i)  
+        
+        # Send an HTTP GET request to fetch the web page
+        response = requests.get(url)
+        
+        # Check if the request was successful (status code 200)
+        if response.status_code == 200:
+            # Parse the HTML content of the web page
+            soup = BeautifulSoup(response.text, 'html.parser')
+        
+            # Find all the <a> (anchor) elements
+            all_links = soup.find_all('a')
+        
+            # Extract the PDF links and their associated text
+            pdf_data = []
+            for link in all_links:
+                if link['href'].endswith('.pdf'):
+                    pdf_url = link['href']
+                    link_text = link.get_text()
+                    pdf_data.append({'text': link_text, 'url': pdf_url})
+    
+        # Create a DataFrame from the extracted data
+        df_temp = pd.DataFrame(pdf_data)
+        df_per_page.append(df_temp)
+    except:
+        ## Run till the pages don't exist anymore and break
+        break
 
-# URL of the web page to scrape
-url = "https://prsindia.org/acts/parliament"  
 
-# Send an HTTP GET request to fetch the web page
-response = requests.get(url)
-
-# Check if the request was successful (status code 200)
-if response.status_code == 200:
-    # Parse the HTML content of the web page
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    # Find all the <a> (anchor) elements
-    all_links = soup.find_all('a')
-
-    # Extract the PDF links and their associated text
-    pdf_data = []
-    for link in all_links:
-        if link['href'].endswith('.pdf'):
-            pdf_url = link['href']
-            link_text = link.get_text()
-            pdf_data.append({'text': link_text, 'url': pdf_url})
-
-# Create a DataFrame from the extracted data
-df = pd.DataFrame(pdf_data)
+df = pd.concat(df_per_page, axis = 0)
 
 
 
@@ -74,10 +86,7 @@ df['date'] = df['hyperlink_text'].apply(extract_year_and_format)
 
 
 
-
 ############################################### CONTENT DOWNLOAD
-
-
 
 #### Now for each of these links, go to the pdf and extract the content to put it on the csv.
 
@@ -99,7 +108,6 @@ def clean_text(text):
 
 
 ################## GOOGLE CLOUD VISION API
-
 from google.cloud import vision_v1
 import os
 
@@ -114,7 +122,7 @@ client = vision_v1.ImageAnnotatorClient()
 
     
 content = []
-for i in range(37, df.shape[0]):
+for i in range(0, df.shape[0]):
     link = df['pdf_link'].iloc[i]
     
     ## print the progress
@@ -167,17 +175,8 @@ df['date'].fillna('01/01/1950', inplace=True)
 
 
 ## Save the csv
-path = "C:/Users/Tejas/Desktop/RepublicAI/ParlimentActs/"
-df.to_csv(path + "ParlimentActs_9sep23.csv", index = False)
-
-
-
-
-
-
-
-
-
+path = "C:/Users/Tejas/Desktop/RepublicAI/StateActs/"
+df.to_csv(path + "StateActs_23sep23.csv", index = False)
 
 
 
