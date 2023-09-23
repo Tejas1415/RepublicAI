@@ -12,6 +12,9 @@ import pandas as pd
 from bs4 import BeautifulSoup
 import re
 import fitz
+from PIL import Image
+from io import BytesIO
+import matplotlib.pyplot as plt
 
 # URL of the web page to scrape
 url = "https://prsindia.org/acts/parliament"  
@@ -81,10 +84,25 @@ def clean_text(text):
         return re.sub(r'[^\x00-\x7F]+', ' ', text)
     else:
         return text
-    
+
+
+################## GOOGLE CLOUD VISION API
+
+from google.cloud import vision_v1
+import os
+
+# Set the path to your JSON key file
+json_key_path = "C:/Users/Tejas/Desktop/PrivateKeys/affable-visitor-399816-221829282aba.json"
+
+# Initialize the Google Cloud Vision API client with the JSON key file
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = json_key_path
+client = vision_v1.ImageAnnotatorClient()
+
+
+
     
 content = []
-for i in range(0, df.shape[0]):
+for i in range(37, df.shape[0]):
     link = df['pdf_link'].iloc[i]
     
     ## print the progress
@@ -104,7 +122,23 @@ for i in range(0, df.shape[0]):
         for page_num in range(pdf_document.page_count):
             page = pdf_document.load_page(page_num)
             pdf_text = page.get_text()
-            text = text + pdf_text
+            if pdf_text:
+                text = text + pdf_text
+            else:
+                pixmap = page.get_pixmap(alpha=False)
+                image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+                #image.show()
+                image_bytes = BytesIO()
+                image.save(image_bytes, format="PNG")
+                image_bytes.seek(0)
+                
+                # Use Google Cloud Vision API to extract text from the image
+                image_content = image_bytes.read()
+                image = vision_v1.Image(content=image_content)
+                response = client.text_detection(image=image)
+                
+                if response.text_annotations:
+                    text += response.text_annotations[0].description + ' '
 
         
         text = clean_text(text)
