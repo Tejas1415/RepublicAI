@@ -119,66 +119,121 @@ os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = json_key_path
 client = vision_v1.ImageAnnotatorClient()
 
 
-
+def scrape_content(df, k):
     
-content = []
-for i in range(0, df.shape[0]):
-    link = df['pdf_link'].iloc[i]
-    
-    ## print the progress
-    print("In ", i, " Out of ", df.shape[0])
-    
-    # Fetch the PDF content from the URL
-    response = requests.get(link)
-    
-    if response.status_code == 200:
-        pdf_content = response.content
+    content = []
+    for i in range(0, df.shape[0]):
+        link = df['pdf_link'].iloc[i]
         
-        # Open the PDF with PyMuPDF (fitz)
-        pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
+        ## print the progress
+        print("In ", i, " Out of ", df.shape[0])
         
-        text = ''
-        # Iterate through the pages and extract text
-        for page_num in range(pdf_document.page_count):
-            page = pdf_document.load_page(page_num)
-            pdf_text = page.get_text()
-            if pdf_text:
-                text = text + pdf_text
-            else:
-                pixmap = page.get_pixmap(alpha=False)
-                image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
-                #image.show()
-                image_bytes = BytesIO()
-                image.save(image_bytes, format="PNG")
-                image_bytes.seek(0)
-                
-                # Use Google Cloud Vision API to extract text from the image
-                image_content = image_bytes.read()
-                image = vision_v1.Image(content=image_content)
-                response = client.text_detection(image=image)
-                
-                if response.text_annotations:
-                    text += response.text_annotations[0].description + ' '
-
+        # Fetch the PDF content from the URL
+        response = requests.get(link)
         
-        text = clean_text(text)
-        content.append(text)
+        if response.status_code == 200:
+            pdf_content = response.content
+            
+            # Open the PDF with PyMuPDF (fitz)
+            pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
+            
+            text = ''
+            # Iterate through the pages and extract text
+            for page_num in range(pdf_document.page_count):
+                page = pdf_document.load_page(page_num)
+                pdf_text = page.get_text()
+                if pdf_text:
+                    text = text + pdf_text
+                else:
+                    try:
+                        pixmap = page.get_pixmap(alpha=False)
+                        image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+                        #image.show()
+                        image_bytes = BytesIO()
+                        image.save(image_bytes, format="PNG")
+                        image_bytes.seek(0)
+                        
+                        # Use Google Cloud Vision API to extract text from the image
+                        image_content = image_bytes.read()
+                        image = vision_v1.Image(content=image_content)
+                        response = client.text_detection(image=image)
+                        
+                        if response.text_annotations:
+                            text += response.text_annotations[0].description + ' '
+                    except:
+                        text = text + ''
+                        print("except reached!!!!!!")
+    
+            
+            text = clean_text(text)
+            content.append(text)
+    
+    
+    
+    df['content'] = content
+    
+    
+    
+    # Replace missing values in the 'date_column' with '01/01/1950'
+    df['date'].fillna('01/01/1950', inplace=True)
+    
+    
+    ## Save the csv
+    path = "C:/Users/Tejas/Desktop/RepublicAI/StateActs/"
+    df.to_csv(path + "StateActs_26sep23_{}.csv".format(k), index = False)
+    
+    pass
 
 
 
-df['content'] = content
+
+
+##### Create pieces of this dataset and run it per 1000 records once. 
+subset_list = []
+subset_size = 1000
+num_subsets = len(df) // subset_size + 1
+
+# Iterate through the DataFrame and extract subsets
+for i in range(num_subsets):
+    start_idx = i * subset_size
+    end_idx = (i + 1) * subset_size
+    subset = df[start_idx:end_idx]
+    subset_list.append(subset)
+    
+    scrape_content(subset, i)
+    
 
 
 
-# Replace missing values in the 'date_column' with '01/01/1950'
-df['date'].fillna('01/01/1950', inplace=True)
 
 
-## Save the csv
-path = "C:/Users/Tejas/Desktop/RepublicAI/StateActs/"
-df.to_csv(path + "StateActs_23sep23.csv", index = False)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
 
 
